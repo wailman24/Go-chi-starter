@@ -1,23 +1,29 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/wailman24/Go-chi-starter.git/internal/models"
-	"github.com/wailman24/Go-chi-starter.git/internal/services"
+	"github.com/wailman24/Go-chi-starter.git/internal/utils"
 	"github.com/wailman24/Go-chi-starter.git/tokens"
 	"golang.org/x/crypto/bcrypt"
 )
 
-type UserHandler struct {
-	serv *services.UserService
+type UserService interface {
+	CreateUser(ctx context.Context, user *models.User) error
+	GetUserByEmail(ctx context.Context, user models.UserLogin) (*models.UserLogin, error)
 }
 
-func NewUserHandler() *UserHandler {
+type UserHandler struct {
+	serv UserService
+}
+
+func NewUserHandler(serv UserService) *UserHandler {
 	return &UserHandler{
-		serv: services.NewUserService(),
+		serv: serv,
 	}
 }
 
@@ -27,41 +33,38 @@ func HashPassword(password string) (string, error) {
 }
 
 func (uh *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var user models.User
 	var validate = validator.New()
 	w.Header().Set("Content-Type", "application/json")
 
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	err = validate.Struct(user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	hashedpwd, err := HashPassword(user.Password)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	user.Password = hashedpwd
 
-	err = uh.serv.CreateUser(&user)
+	err = uh.serv.CreateUser(ctx, &user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.Error(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"code":    http.StatusOK,
-		"message": user,
-	})
-
+	utils.Success(w, user)
 }
 
 func CheckPasswordHash(password, hash string) bool {
@@ -70,6 +73,7 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	var user models.UserLogin
 
 	var validate = validator.New()
@@ -77,37 +81,32 @@ func (uh *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	err = validate.Struct(user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
-	res, err := uh.serv.GetUserByEmail(user)
+	res, err := uh.serv.GetUserByEmail(ctx, user)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
 	if !CheckPasswordHash(user.Password, res.Password) {
-		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		utils.Error(w, http.StatusUnauthorized, err)
 		return
 	}
 
 	token, err := tokens.CreateToken(int(res.ID))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		utils.Error(w, http.StatusBadRequest, err)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"code":    http.StatusOK,
-		"message": user,
-		"token":   token,
-	})
-
+	utils.WithToken(w, res, token)
 }

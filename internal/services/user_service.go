@@ -1,22 +1,28 @@
 package services
 
 import (
+	"context"
+
 	"github.com/wailman24/Go-chi-starter.git/internal/models"
-	"github.com/wailman24/Go-chi-starter.git/internal/repositories"
 )
 
-type UserService struct {
-	repo *repositories.UserRepositorie
+type UserRepository interface {
+	CreateUser(ctx context.Context, u *models.User) error
+	GetUserByEmail(ctx context.Context, user *models.UserLogin) (*models.UserLogin, error)
 }
 
-func NewUserService() *UserService {
+type UserService struct {
+	repo UserRepository
+}
+
+func NewUserService(repo UserRepository) *UserService {
 	return &UserService{
-		repo: repositories.NewUserRepositorie(),
+		repo: repo,
 	}
 }
 
-func (us *UserService) CreateUser(user *models.User) error {
-	err := us.repo.CreateUser(user)
+func (us *UserService) CreateUser(ctx context.Context, user *models.User) error {
+	err := us.repo.CreateUser(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -24,8 +30,8 @@ func (us *UserService) CreateUser(user *models.User) error {
 	return nil
 }
 
-func (us *UserService) GetUserByEmail(user models.UserLogin) (*models.UserLogin, error) {
-	res, err := us.repo.GetUserByEmail(&user)
+func (us *UserService) GetUserByEmail(ctx context.Context, user models.UserLogin) (*models.UserLogin, error) {
+	res, err := us.repo.GetUserByEmail(ctx, &user)
 	if err != nil {
 		return nil, err
 	}

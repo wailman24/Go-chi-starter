@@ -4,17 +4,22 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/wailman24/Go-chi-starter.git/internal/handlers"
 	"github.com/wailman24/Go-chi-starter.git/internal/middlewares"
+	"github.com/wailman24/Go-chi-starter.git/internal/repositories"
+	"github.com/wailman24/Go-chi-starter.git/internal/services"
+	"github.com/wailman24/Go-chi-starter.git/pkg/db"
 )
 
 func UserRoutes() *chi.Mux {
 	r := chi.NewRouter()
-	h := handlers.NewUserHandler()
+	userRepo := repositories.NewUserRepositorie(db.Db)
+	userServ := services.NewUserService(userRepo)
+	h := handlers.NewUserHandler(userServ)
 	r.Post("/login", h.Login)
-	//r.Post("/create", h.Register)
+	r.Post("/create", h.Register)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middlewares.AuthMiddleware)
-		r.Post("/create", h.Register)
+		//r.Post("/create", h.Register)
 	})
 
 	return r
